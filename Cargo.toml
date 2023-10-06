@@ -1,0 +1,11 @@
+[package]
+name = "neoMendelbrot"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tungstenite = "0.15.0"
+rust_decimal = "1.20.0"
+rug = "1.14.0"
