@@ -85,6 +85,7 @@ fn map_to_color(iter: u32, max_iter: u32) -> u8 {
 
 fn start_websocket_server(zoom_level: Arc<Mutex<f64>>, rx_data: Receiver<Vec<u8>>) {
     let server = TcpListener::bind("127.0.0.1:9001").unwrap();
+    let rx_data = Arc::new(Mutex::new(rx_data));
     
     for stream in server.incoming() {
         let zoom_level_clone = zoom_level.clone();
@@ -97,19 +98,32 @@ fn start_websocket_server(zoom_level: Arc<Mutex<f64>>, rx_data: Receiver<Vec<u8>
                 // Read initial zoom level from frontend once per connection
                 let msg_result = websocket.read_message();
                 if let Ok(msg) = msg_result {
+                    println!("Received message: {:?}", msg);  // Log received message
+
                     if msg.is_text() || msg.is_binary() {
-                        let initial_zoom_level: f64 = msg.to_string().parse().unwrap();
-                        let mut zoom_level_lock = zoom_level_clone.lock().unwrap();
-                        *zoom_level_lock = initial_zoom_level;
+                        if let Ok(initial_zoom_level) = msg.to_string().parse::<f64>() {
+                            let mut zoom_level_lock = zoom_level_clone.lock().unwrap();
+                            *zoom_level_lock = initial_zoom_level;
+                            println!("Parsed zoom level: {}", initial_zoom_level);  // Log parsed zoom level
+                        } else {
+                            eprintln!("Failed to parse zoom level.");
+                        }
                     }
                 }
 
                 loop {
-                    let data = rx_data_clone.recv().unwrap();
+                    let rx_data_lock = rx_data_clone.lock().unwrap();
+                    let data = rx_data_lock.recv().unwrap();
                     let message = serde_json::to_string(&data).unwrap();
-                    websocket.write_message(Message::Text(message)).unwrap();
+                    println!("Sending message: {}", message);  // Log message to be sent
+
+                    websocket.write_message(Message::Text(message)).unwrap_or_else(|err| {
+                        eprintln!("Error while sending message: {}", err);  // Log sending errors
+                    });
                 }
             }
         });
     }
 }
+
+

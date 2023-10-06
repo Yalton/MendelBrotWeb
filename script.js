@@ -44,6 +44,22 @@ function init() {
     vertexShader: document.getElementById("vertexShader").textContent,
     fragmentShader: mandelbrotShader,
   });
+  
+  // Event listener for mouse wheel zoom
+  canvas.addEventListener("wheel", function (event) {
+    event.preventDefault();
+
+    // Calculate the new zoom level
+    const delta = Math.sign(event.deltaY);
+    zoomLevel *= Math.pow(1.1, delta);
+
+    // Clamp the zoom level
+    zoomLevel = Math.max(0.0001, zoomLevel);
+
+    // Update the zoom level in the backend
+    updateZoomLevel(zoomLevel);
+  });
+
 
   // Create the Mandelbrot mesh
   mandelbrotMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mandelbrotMaterial);
@@ -65,20 +81,7 @@ window.addEventListener("resize", function () {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// Event listener for mouse wheel zoom
-canvas.addEventListener("wheel", function (event) {
-  event.preventDefault();
 
-  // Calculate the new zoom level
-  const delta = Math.sign(event.deltaY);
-  zoomLevel *= Math.pow(1.1, delta);
-
-  // Clamp the zoom level
-  zoomLevel = Math.max(0.0001, zoomLevel);
-
-  // Update the zoom level in the backend
-  updateZoomLevel(zoomLevel);
-});
 
 // Function to update the zoom level in the backend
 function updateZoomLevel(zoomLevel) {

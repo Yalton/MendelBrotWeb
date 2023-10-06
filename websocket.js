@@ -1,17 +1,20 @@
 // websocket.js
 
 // Establish a WebSocket connection
-const socket = new WebSocket('ws://localhost:3000');
+const socket = new WebSocket('ws://localhost:9001');
 
-// Connection opened
 socket.addEventListener('open', function (event) {
     console.log('WebSocket connection established');
+    requestZoomData(0);
 });
+
 
 socket.addEventListener('message', function (event) {
     const data = JSON.parse(event.data);
+    if(data.hasOwnProperty('zoomLevel')) { // Check if zoomLevel is present
+        zoomLevel = data.zoomLevel;
+    }
     console.log('Received data from backend:', data);
-    zoomLevel = data.zoomLevel; // Assume backend sends new zoomLevel
 });
 
 
@@ -22,6 +25,3 @@ function requestZoomData(zoomLevel) {
     });
     socket.send(message);
 }
-
-// Example usage: request data for zoom level 10
-requestZoomData(10);
