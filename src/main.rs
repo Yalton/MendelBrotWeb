@@ -1,28 +1,34 @@
 extern crate rug;
 use rug::{Complex, Float};
-use std::net::SocketAddr;
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::thread;
 use tungstenite::server::accept;
 use tungstenite::protocol::Message;
 use std::net::TcpListener;
+extern crate serde;
+extern crate serde_json;
+use std::sync::{Arc, Mutex};
+
 
 fn main() {
-    let (tx, rx): (Sender<f64>, Receiver<f64>) = channel();
+    let (tx_data, rx_data): (Sender<Vec<u8>>, Receiver<Vec<u8>>) = channel();
     
-    // Spawn a thread to perform the Mandelbrot calculation
-    let tx_clone = tx.clone();
+    let zoom_level = Arc::new(Mutex::new(1.0)); // Shared zoom level
+    let zoom_level_clone = zoom_level.clone();
+    
+    // Calculation thread
     thread::spawn(move || {
         loop {
-            let zoom_level = rx.recv().unwrap();
-            let result = mandelbrot_calculation(zoom_level);
-
-            // For demonstration, just sending the same zoom level back
-            tx_clone.send(zoom_level).unwrap();
+            let mut zoom_level_lock = zoom_level_clone.lock().unwrap();
+            *zoom_level_lock += 0.001;
+            let result = mandelbrot_calculation(*zoom_level_lock);
+            tx_data.send(result).unwrap();
+            // Consider adding a sleep here to pace the calculation
         }
     });
-    
-    start_websocket_server(tx);
+
+    // WebSocket server thread
+    start_websocket_server(zoom_level, rx_data);
 }
 
 fn mandelbrot_calculation(zoom_level: f64) -> Vec<u8> {
@@ -36,23 +42,37 @@ fn mandelbrot_calculation(zoom_level: f64) -> Vec<u8> {
     let x_step = Float::with_val(precision, (x_max - x_min) / zoom_level);
     let y_step = Float::with_val(precision, (y_max - y_min) / zoom_level);
 
-    for y in (Float::with_val(precision, y_min)..Float::with_val(precision, y_max)).step_by(y_step.clone()) {
-        for x in (Float::with_val(precision, x_min)..Float::with_val(precision, x_max)).step_by(x_step.clone()) {
+    let mut y = Float::with_val(precision, y_min);
+    while y < Float::with_val(precision, y_max) {
+        let mut x = Float::with_val(precision, x_min);
+        while x < Float::with_val(precision, x_max) {
             let c = Complex::with_val(precision, (x.clone(), y.clone()));
-            let mut z = Complex::with_val(precision, (Float::with_val(precision, 0), Float::with_val(precision, 0)));
+            let mut z = Complex::with_val(precision, (Float::with_val(precision, 0.0), Float::with_val(precision, 0.0)));
             let mut i = 0;
 
             while i < max_iter {
-                if z.norm_sqr().to_f64() > 4.0 {
+                let norm = z.clone().norm();  // Clone right before calling `norm`
+                let real_part = norm.real().clone();
+                let imag_part = norm.imag().clone();
+                let norm_sqr = real_part.clone() * real_part + imag_part.clone() * imag_part;
+            
+                let (prec, _) = norm.prec();
+                let four = Float::with_val(prec, 4.0);
+            
+                if norm_sqr > four {
                     break;
                 }
-                z = &z * &z + &c;
+                z = z.clone() * z + c.clone();
                 i += 1;
             }
+            
 
             let color = map_to_color(i, max_iter); // Implement this function to map iterations to colors
             result.push(color);
+            x += &x_step;  // Manually increment x
+
         }
+        y += &y_step;  // Manually increment y
     }
 
     result
@@ -63,25 +83,31 @@ fn map_to_color(iter: u32, max_iter: u32) -> u8 {
     ((iter as f64 / max_iter as f64) * 255.0) as u8
 }
 
-fn start_websocket_server(tx: Sender<f64>) {
+fn start_websocket_server(zoom_level: Arc<Mutex<f64>>, rx_data: Receiver<Vec<u8>>) {
     let server = TcpListener::bind("127.0.0.1:9001").unwrap();
+    
     for stream in server.incoming() {
+        let zoom_level_clone = zoom_level.clone();
+        let rx_data_clone = rx_data.clone();
+        
         thread::spawn(move || {
-            let mut websocket = accept(stream.unwrap()).unwrap();
+            let websocket_result = accept(stream.unwrap());
             
-            loop {
-                let msg = websocket.read_message().unwrap();
-                
-                if msg.is_text() || msg.is_binary() {
-                    // Assume message is zoom level; convert it to f64
-                    let zoom_level: f64 = msg.to_string().parse().unwrap();
-                    
-                    // Send it to the Mandelbrot calculation thread
-                    tx.send(zoom_level).unwrap();
-                    
-                    // This is where you would usually send back the real calculation result
-                    let reply = Message::Text("Data from backend".to_string());
-                    websocket.write_message(reply).unwrap();
+            if let Ok(mut websocket) = websocket_result {
+                // Read initial zoom level from frontend once per connection
+                let msg_result = websocket.read_message();
+                if let Ok(msg) = msg_result {
+                    if msg.is_text() || msg.is_binary() {
+                        let initial_zoom_level: f64 = msg.to_string().parse().unwrap();
+                        let mut zoom_level_lock = zoom_level_clone.lock().unwrap();
+                        *zoom_level_lock = initial_zoom_level;
+                    }
+                }
+
+                loop {
+                    let data = rx_data_clone.recv().unwrap();
+                    let message = serde_json::to_string(&data).unwrap();
+                    websocket.write_message(Message::Text(message)).unwrap();
                 }
             }
         });

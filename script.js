@@ -6,6 +6,7 @@ let canvas, loadingText, errorText;
 let mandelbrotShader, mandelbrotMaterial, mandelbrotMesh;
 let zoomLevel = 1.0;
 
+
 // Initialize the scene
 function init() {
   // Get the canvas element
@@ -52,16 +53,12 @@ function init() {
   animate();
 }
 
-// Animation loop
 function animate() {
   requestAnimationFrame(animate);
-
-  // Update the zoom level
-  mandelbrotMaterial.uniforms.zoomLevel.value = zoomLevel;
-
-  // Render the scene
+  mandelbrotMaterial.uniforms.zoomLevel.value = zoomLevel;  // This zoomLevel is updated via WebSocket
   renderer.render(scene, camera);
 }
+
 
 // Event listener for window resize
 window.addEventListener("resize", function () {
