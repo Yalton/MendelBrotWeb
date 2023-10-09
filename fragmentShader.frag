@@ -1,8 +1,34 @@
+
+//mendelbrotShader.frag 
 precision highp float;
 
 uniform vec2 resolution;
 uniform vec2 center;
 uniform float zoom;
+
+vec3 hsv2rgb(vec3 hsv) {
+  vec3 rgb;
+  
+  float c = hsv.z * hsv.y;
+  float x = c * (1.0 - abs(mod(hsv.x * 6.0, 2.0) - 1.0));
+  float m = hsv.z - c;
+  
+  if (hsv.x < 1.0 / 6.0) {
+    rgb = vec3(c, x, 0.0);
+  } else if (hsv.x < 2.0 / 6.0) {
+    rgb = vec3(x, c, 0.0);
+  } else if (hsv.x < 3.0 / 6.0) {
+    rgb = vec3(0.0, c, x);
+  } else if (hsv.x < 4.0 / 6.0) {
+    rgb = vec3(0.0, x, c);
+  } else if (hsv.x < 5.0 / 6.0) {
+    rgb = vec3(x, 0.0, c);
+  } else {
+    rgb = vec3(c, 0.0, x);
+  }
+  
+  return rgb + m;
+}
 
 vec4 mandelbrotShader() {
   vec2 position = (gl_FragCoord.xy - resolution.xy / 2.0) / zoom + center;
@@ -11,7 +37,7 @@ vec4 mandelbrotShader() {
   vec2 c = position;
   
   float iterations = 0.0;
-  float maxIterations = 100.0;
+  const float maxIterations = 100.0;
   
   for (int i = 0; i < int(maxIterations); i++) {
     if (dot(z, z) > 4.0) {
@@ -38,5 +64,6 @@ vec4 mandelbrotShader() {
 }
 
 void main() {
-  gl_FragColor = mandelbrotShader();
+  vec4 color = mandelbrotShader(); // Calculate Mandelbrot color here
+  gl_FragColor = color;
 }
