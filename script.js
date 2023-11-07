@@ -12,6 +12,9 @@ canvas = document.getElementById("canvas");
 dataTexture = new THREE.DataTexture(new Uint8Array(), 1, 1, THREE.RGBAFormat);
 dataTexture.needsUpdate = true;
 
+socket = new WebSocket('ws://127.0.0.1:9001');
+socket.binaryType = 'arraybuffer'; // To handle binary data if you decide to use that
+
 
 function init(fragmentShader, vertexShader) {
   console.log("Init function called.");
@@ -62,53 +65,24 @@ function init(fragmentShader, vertexShader) {
   // Start the animation loop
   animate();
 
-
-
-
-  // let vertShader = gl.createShader(gl.VERTEX_SHADER);
-  // gl.shaderSource(vertShader, vertexShader);
-  // gl.compileShader(vertShader);
-  // if (!gl.getShaderParameter(vertShader, gl.COMPILE_STATUS)) {
-  //   console.error("VERTEX SHADER COMPILE ERROR: ", gl.getShaderInfoLog(vertShader));
-  // }
-
-  // let fragShader = gl.createShader(gl.FRAGMENT_SHADER);
-  // gl.shaderSource(fragShader, fragmentShader);
-  // gl.compileShader(fragShader);
-  // if (!gl.getShaderParameter(fragShader, gl.COMPILE_STATUS)) {
-  //   console.error("FRAGMENT SHADER COMPILE ERROR: ", gl.getShaderInfoLog(fragShader));
-  // }
-  // Create the Mandelbrot mesh
-
 }
+
+socket.onmessage = function(event) {
+  const data = new Uint8Array(event.data);
+  handleData(data);
+};
+
+socket.onerror = function(error) {
+  console.error('WebSocket Error:', error);
+};
 
 function animate() {
-  mandelbrotMaterial.uniforms.resolution.value.set(renderer.domElement.width, renderer.domElement.height); // New line
   requestAnimationFrame(animate);
   mandelbrotMaterial.uniforms.zoomLevel.value = zoomLevel;
-  mandelbrotMaterial.uniforms.dataTexture.value = dataTexture;
   dataTexture.needsUpdate = true;  // Mark the texture for update
   renderer.render(scene, camera);
-  zoomLevel += 0.01;  // Small increments
-  updateZoomLevel(zoomLevel)
+  zoomLevel += 0.001; // Implement appropriate zoom control here
 }
-
-
-
-// Event listener for mouse wheel zoom
-// canvas.addEventListener("wheel", function (event) {
-//   event.preventDefault();
-
-//   // Calculate the new zoom level
-//   const delta = Math.sign(event.deltaY);
-//   zoomLevel *= Math.pow(1.1, delta);
-
-//   // Clamp the zoom level
-//   zoomLevel = Math.max(0.0001, zoomLevel);
-
-//   // Update the zoom level in the backend
-//   updateZoomLevel(zoomLevel);
-// }, { passive: true });
 
 async function loadShader(url) {
   console.log(`Attempting to load shader from: ${url}`);
@@ -121,18 +95,16 @@ async function loadShader(url) {
   return text;
 }
 
-// Event listener for window resize
 window.addEventListener("resize", function () {
   if (renderer) {
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    renderer.setSize(width, height);
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+    mandelbrotMaterial.uniforms.resolution.value.set(width, height);
   }
 });
-
-// Function to update the zoom level in the backend
-function updateZoomLevel(zoomLevel) {
-  // Send the zoom level to the backend using websockets
-  // ...
-}
 
 // Function to handle errors
 function handleError(message) {
@@ -169,23 +141,6 @@ function handleLoadingComplete() {
   loadingText.style.display = "none";
 }
 
-// websockets
-// socket.addEventListener('open', function (event) {
-//   console.log('WebSocket connection established');
-//   requestZoomData(0);
-// });
-
-
-// socket.addEventListener('message', function (event) {
-//   const data = JSON.parse(event.data);
-//   if (data.hasOwnProperty('zoomLevel')) { // Check if zoomLevel is present
-//     zoomLevel = data.zoomLevel;
-//   }
-//   console.log('Received data from backend:', data);
-//   handleData(data);  // Replace 'someArray' with whatever your actual data field is.
-// });
-
-
 // Send a message to the backend to request data for a specific zoom level
 function requestZoomData(zoomLevel) {
   const message = JSON.stringify({
@@ -216,8 +171,6 @@ document.addEventListener("DOMContentLoaded", function () {
   main();
 
   // Initialize WebSocket connection here
-  socket = new WebSocket('ws://localhost:9001');
-
   socket.addEventListener('open', function (event) {
     console.log('WebSocket connection established');
     requestZoomData(0);
